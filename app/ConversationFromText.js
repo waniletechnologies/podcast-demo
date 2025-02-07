@@ -17,24 +17,13 @@ const AGENTS = {
   },
 };
 
-export function PodcastConversation() {
-  const [script, setScript] = useState([]);
-  const [currentLine, setCurrentLine] = useState(0);
+export function ConversationFromText() {
+  const [inputText, setInputText] = useState("");
+  const [selectedAgent, setSelectedAgent] = useState(AGENTS.HOST);
   const [isPlaying, setIsPlaying] = useState(false);
   const [conversationHistory, setConversationHistory] = useState([]);
-
-  // Initialize both agents
-  const hostConversation = useConversation();
-  const guestConversation = useConversation();
-
-  // Enhanced anger settings
-  const ANGER_SETTINGS = {
-    pitch: 1.4, // Higher pitch for intensity
-    speed: 1.25, // Faster speech pace
-    stability: 0.1, // More vocal variability
-    boost: 0.85, // Maintain clarity while emotional
-    volume: 1.2, // Louder delivery
-  };
+  const [script, setScript] = useState([]);
+  const [currentLine, setCurrentLine] = useState(0);
 
   // Podcast script (could be loaded from an API or user input)
   const podcastScript = [
@@ -52,7 +41,7 @@ export function PodcastConversation() {
     },
     {
       agent: AGENTS.GUEST,
-      text: "Thank you! It's a pleasure to be here.",
+      text: "Thank you! It's, umm, a pleasure to be here.",
       emotion: {
         pitch: 1.1,
         speed: 1.0,
@@ -76,7 +65,7 @@ export function PodcastConversation() {
     },
     {
       agent: AGENTS.GUEST,
-      text: "It all started with a simple idea. I wanted to make a difference.",
+      text: "Well, it all started with a simple idea. I wanted to, like, make a difference.",
       emotion: {
         pitch: 1.0,
         speed: 1.0,
@@ -100,7 +89,7 @@ export function PodcastConversation() {
     },
     {
       agent: AGENTS.GUEST,
-      text: "There were many obstacles, but perseverance was key.",
+      text: "Oh, there were many obstacles, but, umm, perseverance was key.",
       emotion: {
         pitch: 1.0,
         speed: 1.0,
@@ -124,7 +113,7 @@ export function PodcastConversation() {
     },
     {
       agent: AGENTS.GUEST,
-      text: "Indeed. And the support from the community has been incredible.",
+      text: "Indeed. And the support from the community has been, like, incredible.",
       emotion: {
         pitch: 1.0,
         speed: 1.0,
@@ -148,7 +137,7 @@ export function PodcastConversation() {
     },
     {
       agent: AGENTS.GUEST,
-      text: "I'm working on some exciting new projects. Stay tuned!",
+      text: "I'm working on some, umm, exciting new projects. Stay tuned!",
       emotion: {
         pitch: 1.0,
         speed: 1.0,
@@ -159,6 +148,7 @@ export function PodcastConversation() {
       },
     },
   ];
+
   useEffect(() => {
     setScript(podcastScript);
   }, []);
@@ -213,7 +203,6 @@ export function PodcastConversation() {
       const audioUrl = URL.createObjectURL(audioBlob);
       const audioElement = new Audio(audioUrl);
 
-      // Wait for audio to finish playing
       await new Promise((resolve) => {
         audioElement.play();
         audioElement.addEventListener("ended", resolve);
@@ -223,9 +212,53 @@ export function PodcastConversation() {
     }
   };
 
+  const playText = async () => {
+    if (!inputText.trim()) return;
+
+    setIsPlaying(true);
+    setConversationHistory((prev) => [
+      ...prev,
+      { speaker: selectedAgent.name, text: inputText },
+    ]);
+
+    try {
+      const response = await axios.post(
+        "/api/generate-tts",
+        {
+          text: inputText,
+          voiceId: selectedAgent.voiceId,
+          settings: {
+            pitch: 1.0,
+            speed: 1.0,
+            stability: 0.8,
+            boost: 0.9,
+            volume: 1.0,
+            style: "conversational",
+          },
+        },
+        { responseType: "arraybuffer" }
+      );
+
+      const audioBlob = new Blob([response.data], { type: "audio/mpeg" });
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audioElement = new Audio(audioUrl);
+
+      await new Promise((resolve) => {
+        audioElement.play();
+        audioElement.addEventListener("ended", resolve);
+      });
+    } catch (error) {
+      console.error("Error playing text:", error);
+    } finally {
+      setIsPlaying(false);
+      setInputText("");
+    }
+  };
+
   return (
     <div className="max-w-2xl mx-auto p-6">
       <h1 className="text-3xl font-bold mb-8">
+        {" "}
         AI Podcast Demo for Bell from Wanile AI
       </h1>
 
@@ -238,19 +271,40 @@ export function PodcastConversation() {
         </button>
       </div>
 
+      <div className="mb-4">
+        <textarea
+          id="text-input"
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          className="border p-2 rounded w-full h-32"
+          placeholder="Type or paste your text here..."
+        />
+        <div className="mt-2">
+          <label className="mr-2">Select Agent:</label>
+          <select
+            value={selectedAgent.id}
+            onChange={(e) =>
+              setSelectedAgent(
+                e.target.value === AGENTS.HOST.id ? AGENTS.HOST : AGENTS.GUEST
+              )
+            }
+            className="border p-2 rounded">
+            <option value={AGENTS.HOST.id}>{AGENTS.HOST.name}</option>
+            <option value={AGENTS.GUEST.id}>{AGENTS.GUEST.name}</option>
+          </select>
+        </div>
+        <button
+          onClick={playText}
+          className="bg-blue-500 text-white px-4 py-2 rounded mt-2"
+          disabled={isPlaying}>
+          {isPlaying ? "Playing..." : "Read Aloud"}
+        </button>
+      </div>
+
       <div className="mb-6 h-96 overflow-y-auto border p-4 rounded">
         {conversationHistory.map((entry, index) => (
-          <div
-            key={index}
-            className={`mb-4 p-3 rounded ${
-              index === currentLine ? "bg-yellow-50" : ""
-            }`}>
-            <strong
-              className={`text-${
-                entry.speaker === "Host" ? "blue" : "green"
-              }-600`}>
-              {entry.speaker}:
-            </strong>
+          <div key={index} className="mb-4 p-3 rounded bg-yellow-50">
+            <strong className="text-blue-600">{entry.speaker}:</strong>
             <p className="ml-2">{entry.text}</p>
           </div>
         ))}
